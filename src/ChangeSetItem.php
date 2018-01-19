@@ -326,10 +326,80 @@ class ChangeSetItem extends DataObject implements Thumbnail
         }
     }
 
-    /** Reverts this item, then close it. **/
+    /**
+     * Revert this item, then close it.
+     *
+     * Note: Unlike Versioned::doPublish() and Versioned::doUnpublish, this action is not recursive.
+     **/
     public function revert()
     {
-        user_error('Not implemented', E_USER_ERROR);
+        if (!class_exists($this->ObjectClass)) {
+            throw new UnexpectedDataException("Invalid Class '{$this->ObjectClass}' in ChangeSetItem #{$this->ID}");
+        }
+
+        // Logical checks prior to publish
+        if (!$this->canRevert()) {
+            throw new Exception("The current member does not have permission to revert this ChangeSetItem.");
+        }
+
+        // Skip unversioned records, we can't revert them
+        if (!$this->isVersioned()) {
+            return;
+        }
+
+        if (!$this->VersionBefore && !$this->VersionAfter) {
+            throw new BadMethodCallException(
+                "This ChangeSetItem has not yet been published or has already been reverted"
+            );
+        }
+
+        $versionBefore = Versioned::get_versionnumber_by_stage(
+            $this->ObjectClass,
+            Versioned::DRAFT,
+            $this->ObjectID,
+            false
+        );
+        $versionAfter = Versioned::get_versionnumber_by_stage(
+            $this->ObjectClass,
+            Versioned::LIVE,
+            $this->ObjectID,
+            false
+        );
+
+        switch ($this->getChangeType()) {
+            case static::CHANGE_NONE: {
+                break;
+            }
+            case static::CHANGE_DELETED: {
+                // Re-publish the item non-recursively
+                $deleted = Versioned::get_including_deleted($this->ObjectClass)->byID($this->VersionBefore);
+                $deleted->copyVersionToStage($deleted->Version, Versioned::DRAFT);
+                $deleted->writeWithoutVersion();
+                $deleted->publishSingle();
+                $versionBefore = 0;
+                break;
+            }
+            case static::CHANGE_MODIFIED: {
+                // Non-recursively publish the original item
+                $object = $this->getObjectInStage(Versioned::LIVE);
+                $object->copyVersionToStage($this->VersionBefore, Versioned::DRAFT);
+                $object->writeWithoutVersion();
+                $object->publishSingle();
+                break;
+            }
+            case static::CHANGE_CREATED: {
+                // Unpublish the item
+                $object = $this->getObjectInStage(Versioned::LIVE);
+                $object->doUnpublish();
+                $versionAfter = 0;
+                break;
+            }
+        }
+
+        $this->VersionBefore = $versionBefore;
+        $this->VersionAfter = $versionAfter;
+
+        $this->write();
     }
 
     public function canView($member = null)
@@ -358,7 +428,7 @@ class ChangeSetItem extends DataObject implements Thumbnail
      * @param Member $member
      * @return bool
      */
-    public function canRevert($member)
+    public function canRevert($member = null)
     {
         // No action for unversiond objects so no action to deny
         if (!$this->isVersioned()) {

@@ -1,0 +1,21 @@
+SilverStripe\Versioned\Tests\ChangeSetItemTest\BaseObject:
+  base:
+    Foo: 1
+  base2:
+    Foo: 3
+SilverStripe\Versioned\Tests\ChangeSetItemTest\EndObject:
+  end1:
+    Baz: 1
+  end2:
+    Baz: 2
+SilverStripe\Versioned\Tests\ChangeSetItemTest\MidObject:
+  mid1:
+    Bar: 1
+    Base: =>SilverStripe\Versioned\Tests\ChangeSetItemTest\BaseObject.base
+    End: =>SilverStripe\Versioned\Tests\ChangeSetItemTest\EndObject.end1
+  mid2:
+    Bar: 2
+    Base: =>SilverStripe\Versioned\Tests\ChangeSetItemTest\BaseObject.base
+    End: =>SilverStripe\Versioned\Tests\ChangeSetItemTest\EndObject.end2
+  mid3:
+    Base: =>SilverStripe\Versioned\Tests\ChangeSetItemTest\BaseObject.base2
